@@ -6,6 +6,7 @@ import os
 import argparse
 import sys
 import tensorflow as tf
+import block_cnn as blocks
 
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
 
@@ -67,19 +68,64 @@ def inputs(filename, batch_size, img_size):
         images, labels = tf.train.batch([image, label],
                                         batch_size=batch_size,
                                         capacity=100 + 3*batch_size,
-                                        num_threads=2,
-                                        min_after_dequeue=100)
+                                        num_threads=2)
 
     return images, labels
 
 
 def test_model():
     with tf.Graph().as_default():
-        images, labels = inputs(filename=FLAGS.train_path,
+        images, labels = inputs(filename=FLAGS.test_path,
                                 batch_size=FLAGS.batch_size,
                                 img_size=FLAGS.img_size)
 
-        inference(image, num_classes, keep_prob):
+        logits = blocks.inference(image=images,
+                                  num_classes=FLAGS.num_classes,
+                                  keep_prob=FLAGS.keep_prob)
+
+        loss = blocks.loss(logits, labels)
+
+        train_op = blocks.train(loss, FLAGS.learning_rate)
+
+        logits = blocks.inference(image=images,
+                                  num_classes=FLAGS.num_classes,
+                                  keep_prob=1.0)
+
+        accuracy = blocks.evaluation(logits=logits,
+                                     labels=labels)
+
+        sess = tf.Session()
+        init_op = tf.group(tf.global_variables_initializer(),
+                           tf.local_variables_initializer())
+        sess.run(init_op)
+
+        # Checkpoint saver (save the model)
+        saver = tf.train.Saver()
+
+        # Set checkpoint path and restore checkpoint if exists
+        ckpt = tf.train.get_checkpoint_state(FLAGS.checkpoint_dir)
+        if ckpt and ckpt.model_checkpoint_path:
+            saver.restore(sess, save_path=ckpt.model_checkpoint_path)
+            print('Loaded model from latest checkpoint')
+
+        # Coordinator
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(sess=sess,
+                                               coord=coord)
+
+        try:
+            while not coord.should_stop():
+                # Train network, compute loss and summaries for TensorBoard
+                accuracy = sess.run(accuracy)
+        except tf.errors.OutOfRangeError:
+            # End of training
+            print('Done with test')
+        finally:
+            coord.request_stop()
+
+        coord.join(threads)
+        sess.close()
+
 
 
 def main():
@@ -108,7 +154,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--checkpoint_dir',
         type=str,
-        default='ckpt_00',
+        default='ckpt',
         help='Directory for load the model checkpoints.'
     )
 
