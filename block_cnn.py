@@ -20,7 +20,7 @@ def variable_summaries(var):
     tf.summary.histogram('histogram', var)
 
 
-def conv2d(name, input, ksize, f_in, f_out):
+def conv2d(name, input, ksize, f_in, f_out, train_phase):
     """ Function for the convolutional layers.
     CNN layers with 1 x 1 stride and zero padding
 
@@ -48,14 +48,17 @@ def conv2d(name, input, ksize, f_in, f_out):
                                 initializer=tf.zeros_initializer())
             variable_summaries(bias)
 
-        # Convolutional layer
-        conv = tf.nn.conv2d(input,
+        # Convolutional and activation layer
+        conv = tf.nn.elu(tf.nn.conv2d(input,
                             filter=weights,
                             strides=[1, 1, 1, 1],
-                            padding='SAME') + bias
+                            padding='SAME') + bias, name=name)
 
-        # Activation layer
-        return tf.nn.relu(conv, name=name)
+        # Batch normalisation
+        return tf.contrib.layers.batch_norm(conv,
+                                            center=True,
+                                            scale=True,
+                                            is_training=train_phase)
 
 
 def max_pool(name, input, ksize):
@@ -78,7 +81,7 @@ def max_pool(name, input, ksize):
                               name=name)
 
 
-def fully_connected(name, input, f_in, f_out, keep_prob=1.0):
+def fully_connected(name, input, f_in, f_out, keep_prob, training_phase):
     """
     Function for a fully_connected layer
     Arg:
@@ -103,14 +106,20 @@ def fully_connected(name, input, f_in, f_out, keep_prob=1.0):
                                    initializer=tf.zeros_initializer())
             variable_summaries(bias)
 
-        # Fully connected layer operation
-        fc = tf.nn.relu(tf.matmul(input, weights) + bias, name=name)
+        # Fully connected layer operation with activation layer
+        fc_1 = tf.nn.elu(tf.matmul(input, weights) + bias, name=name)
+
+        # Batch normalisation
+        fc_2 = tf.contrib.layers.batch_norm(fc_1,
+                                            center=True,
+                                            scale=True,
+                                            is_training=training_phase)
 
         # Apply dropout
-        return tf.nn.dropout(fc, keep_prob, name=name+'_drop')
+        return tf.nn.dropout(fc_2, keep_prob, name=name+'_drop')
 
 
-def inference(image, num_classes, keep_prob):
+def inference(image, num_classes, keep_prob, train_phase):
     """
     Graph definition
     Args:
@@ -122,45 +131,87 @@ def inference(image, num_classes, keep_prob):
         Logits from the softmax layer
     """
     # Convolutional layer 1
-    conv1 = conv2d('conv1', input=image, ksize=3, f_in=3, f_out=32)
+    conv1 = conv2d('conv1',
+                   input=image,
+                   ksize=3,
+                   f_in=3,
+                   f_out=32,
+                   train_phase=train_phase)
 
     # Convolutional layer 2
-    conv2 = conv2d('conv2', input=conv1, ksize=3, f_in=32, f_out=32)
+    conv2 = conv2d('conv2',
+                   input=conv1,
+                   ksize=3,
+                   f_in=32,
+                   f_out=32,
+                   train_phase=train_phase)
 
     # Maxpool 1
     pool1 = max_pool('max_pool1', conv2, 3)
 
     # Convolutional layer 3
-    conv3 = conv2d('conv3', input=pool1, ksize=3, f_in=32, f_out=64)
+    conv3 = conv2d('conv3',
+                   input=pool1,
+                   ksize=3,
+                   f_in=32,
+                   f_out=64,
+                   train_phase=train_phase)
 
     # Convolutional layer 4
-    conv4 = conv2d('conv4', input=conv3, ksize=3, f_in=64, f_out=64)
+    conv4 = conv2d('conv4',
+                   input=conv3,
+                   ksize=3,
+                   f_in=64,
+                   f_out=64,
+                   train_phase=train_phase)
 
     # Maxpool 2
     pool2 = max_pool('max_pool2', conv4, 3)
 
     # Convolutional layer 5
-    conv5 = conv2d('conv5', input=pool2, ksize=3, f_in=64, f_out=128)
+    conv5 = conv2d('conv5',
+                   input=pool2,
+                   ksize=3,
+                   f_in=64,
+                   f_out=128,
+                   train_phase=train_phase)
 
     # Convolutional layer 6
-    conv6 = conv2d('conv6', input=conv5, ksize=3, f_in=128, f_out=128)
+    conv6 = conv2d('conv6',
+                   input=conv5,
+                   ksize=3,
+                   f_in=128,
+                   f_out=128,
+                   train_phase=train_phase)
 
     # Maxpool 3
     pool3 = max_pool('max_pool3', conv6, 3)
 
     # Convolutional layer 7
-    conv7 = conv2d('conv7', input=pool3, ksize=3, f_in=128, f_out=256)
+    conv7 = conv2d('conv7',
+                   input=pool3,
+                   ksize=3,
+                   f_in=128,
+                   f_out=256,
+                   train_phase=train_phase)
 
     # Convolutional layer 8
-    conv8 = conv2d('conv8', input=conv7, ksize=3, f_in=256, f_out=256)
+    conv8 = conv2d('conv8',
+                   input=conv7,
+                   ksize=3,
+                   f_in=256,
+                   f_out=256,
+                   train_phase=train_phase)
 
     # Flatten layer (for fully_connected layer)
     with tf.name_scope('flatten'):
-        flat_dim = conv8.get_shape()[1].value * conv8.get_shape()[2].value * conv8.get_shape()[3].value
+        flat_dim = conv8.get_shape()[1].value * conv8.get_shape()[2].value \
+                   * conv8.get_shape()[3].value
         flat = tf.reshape(conv8, [-1, flat_dim])
 
     # Fully connected layer 1
-    fc1 = fully_connected('fc1', flat, flat_dim, 1024, keep_prob)
+    fc1 = fully_connected('fc1', flat, flat_dim, 1024, keep_prob,
+                          training_phase=train_phase)
 
     # Softmax layer
     with tf.variable_scope('softmax') as scope:
@@ -229,10 +280,12 @@ def evaluation(logits, labels):
          Classification accuracy [0,1)
     """
     # Evaluate accuracy
-    correct_prediction = tf.nn.in_top_k(logits, labels, 1)
-    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+    with tf.control_dependencies(update_ops):
+        correct_prediction = tf.nn.in_top_k(logits, labels, 1)
+        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
-    return accuracy
+        return accuracy
 
 
 

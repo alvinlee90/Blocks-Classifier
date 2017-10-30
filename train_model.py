@@ -83,26 +83,33 @@ def train_model():
     Function to train the model
     """
     with tf.Graph().as_default():
-        # Graph definition
+        # Keep probability for drop out
         keep_prob = tf.placeholder_with_default(FLAGS.keep_prob,
                                                 shape=[],
                                                 name='keep_prob')
 
+        # is_training parameter for batch normalisation
+        train_phase = tf.placeholder_with_default(True,
+                                                  shape=[],
+                                                  name='train_phase')
+
+        # Training global step variable
         global_step = tf.Variable(0, dtype=tf.int32, trainable=False, name='global_step')
 
         with tf.name_scope('input'):
-
-
+            # Training dataset
             train_images, train_labels = inputs(filename=FLAGS.train_path,
                                                 batch_size=FLAGS.batch_size,
                                                 num_epochs=FLAGS.num_epochs,
                                                 img_size=FLAGS.img_size)
 
+            # Validation dataset
             valid_images, valid_labels = inputs(filename=FLAGS.validation_path,
                                                 batch_size=FLAGS.batch_size,
                                                 num_epochs=FLAGS.num_epochs,
                                                 img_size=FLAGS.img_size)
 
+            # Placeholders for the input images and labels
             _images = tf.placeholder_with_default(input=train_images,
                                                   shape=[None,
                                                          FLAGS.img_size,
@@ -114,17 +121,22 @@ def train_model():
                                                   shape=[None],
                                                   name='labels')
 
+        # Graph interference
         logits = blocks.inference(image=_images,
                                   num_classes=FLAGS.num_classes,
-                                  keep_prob=keep_prob)
+                                  keep_prob=keep_prob,
+                                  train_phase=train_phase)
 
+        # Graph Loss
         loss = blocks.loss(logits, _labels)
 
+        # Graph train operation
         train_op = blocks.train(loss, FLAGS.learning_rate, global_step)
 
         # Summary for TensorBoard
         summary_op = tf.summary.merge_all()
 
+        # Evaluation function (model accuracy)
         with tf.name_scope('evaluate'):
             accuracy = blocks.evaluation(logits, _labels)
             training_summary = tf.summary.scalar("training_accuracy", accuracy)
@@ -155,6 +167,7 @@ def train_model():
                                                coord=coord)
 
         try:
+            # Initialise the global_step and start time
             step = sess.run(global_step)
             start_time = time.time()
 
@@ -163,14 +176,15 @@ def train_model():
                 _, loss_value, summary = sess.run([train_op, loss, summary_op])
                 writer.add_summary(summary, global_step=step)
 
-                # Save checkpoint and print training update
+                # Save checkpoint and print training updates (loss and accuracy)
                 if step % 100 == 0:
                     # Save checkpoint
                     saver.save(sess, FLAGS.checkpoint_dir + "/block_cnn")
 
                     # Training accuracy
                     train_acc, train_summary = sess.run([accuracy, training_summary],
-                                                        feed_dict={keep_prob: 1.0})
+                                                        feed_dict={keep_prob: 1.0,
+                                                                   train_phase: False})
                     writer.add_summary(train_summary, step)
 
                     # Validation accuracy
@@ -178,7 +192,8 @@ def train_model():
                     valid_acc, valid_summary = sess.run([accuracy, validation_summary],
                                                         feed_dict={_images: vimage,
                                                                    _labels: vlabels,
-                                                                   keep_prob: 1.0})
+                                                                   keep_prob: 1.0,
+                                                                   train_phase: False})
                     writer.add_summary(valid_summary, step)
 
                     duration = time.time() - start_time
@@ -199,6 +214,7 @@ def train_model():
 
 def main(_):
     train_model()
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
