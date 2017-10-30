@@ -62,21 +62,19 @@ def inputs(filename, batch_size, num_epochs, img_size):
     Returns:
         images, labels: images and labels for the batch
     """
-    with tf.name_scope('input'):
-        # Create a list of filenames and pass it to a queue
-        filename_queue = tf.train.string_input_producer([filename],
-                                                        num_epochs=num_epochs,
-                                                        shuffle=True)
+    # Create a list of filenames and pass it to a queue
+    filename_queue = tf.train.string_input_producer([filename],
+                                                    num_epochs=num_epochs,
+                                                    shuffle=True)
 
-        image, label = read_and_decode(filename_queue, img_size)
+    image, label = read_and_decode(filename_queue, img_size)
 
-        # Creates batches by randomly shuffling tensors
-        images, labels = tf.train.shuffle_batch([image, label],
-                                                batch_size=batch_size,
-                                                capacity=100 + 3*batch_size,
-                                                num_threads=2,
-                                                min_after_dequeue=100)
-
+    # Creates batches by randomly shuffling tensors
+    images, labels = tf.train.shuffle_batch([image, label],
+                                            batch_size=batch_size,
+                                            capacity=100 + 3*batch_size,
+                                            num_threads=1,
+                                            min_after_dequeue=100)
     return images, labels
 
 
@@ -85,21 +83,50 @@ def train_model():
     Function to train the model
     """
     with tf.Graph().as_default():
-        images, labels = inputs(filename=FLAGS.train_path,
-                                batch_size=FLAGS.batch_size,
-                                num_epochs=FLAGS.num_epochs,
-                                img_size=FLAGS.img_size)
-
-        logits = blocks.inference(image=images,
-                                  num_classes=FLAGS.num_classes,
-                                  keep_prob=FLAGS.keep_prob)
-
         # Graph definition
-        loss = blocks.loss(logits, labels)
-        train_op = blocks.train(loss, FLAGS.learning_rate)
+        with tf.name_scope('input'):
+            global_step = tf.Variable(0, dtype=tf.int32, trainable=False, name='global_step')
+
+            train_images, train_labels = inputs(filename=FLAGS.train_path,
+                                                batch_size=FLAGS.batch_size,
+                                                num_epochs=FLAGS.num_epochs,
+                                                img_size=FLAGS.img_size)
+
+            valid_images, valid_labels = inputs(filename=FLAGS.validation_path,
+                                                batch_size=FLAGS.batch_size,
+                                                num_epochs=FLAGS.num_epochs,
+                                                img_size=FLAGS.img_size)
+
+            _images = tf.placeholder_with_default(input=train_images,
+                                                  shape=[None,
+                                                         FLAGS.img_size,
+                                                         FLAGS.img_size,
+                                                         3],
+                                                  name='images')
+
+            _labels = tf.placeholder_with_default(input=train_labels,
+                                                  shape=[None],
+                                                  name='labels')
+
+            keep_prob = tf.placeholder_with_default(FLAGS.keep_prob,
+                                                    shape=[],
+                                                    name='keep_prob')
+
+        logits = blocks.inference(image=_images,
+                                  num_classes=FLAGS.num_classes,
+                                  keep_prob=keep_prob)
+
+        loss = blocks.loss(logits, _labels)
+
+        train_op = blocks.train(loss, FLAGS.learning_rate, global_step)
 
         # Summary for TensorBoard
         summary_op = tf.summary.merge_all()
+
+        with tf.name_scope('evaluate'):
+            accuracy = blocks.evaluation(logits, _labels)
+            training_summary = tf.summary.scalar("training_accuracy", accuracy)
+            validation_summary = tf.summary.scalar("validation_accuracy", accuracy)
 
         # Session
         sess = tf.Session()
@@ -126,7 +153,7 @@ def train_model():
                                                coord=coord)
 
         try:
-            step = 0
+            step = sess.run(global_step)
             start_time = time.time()
 
             while not coord.should_stop():
@@ -135,12 +162,26 @@ def train_model():
                 writer.add_summary(summary, global_step=step)
 
                 # Save checkpoint and print training update
-                if step % 1000 == 0:
+                if step % 100 == 0:
+                    # Save checkpoint
                     saver.save(sess, FLAGS.checkpoint_dir + "/block_cnn")
-                    duration = time.time() - start_time
 
-                    print('Step %d: loss = %.2f (%.3f sec)' % (step, loss_value,
-                                                               duration))
+                    # Training accuracy
+                    train_acc, train_summary = sess.run([accuracy, training_summary],
+                                                        feed_dict={keep_prob: 1.0})
+                    writer.add_summary(train_summary, step)
+
+                    # Validation accuracy
+                    vimage, vlabels = sess.run([valid_images, valid_labels])
+                    valid_acc, valid_summary = sess.run([accuracy, validation_summary],
+                                                        feed_dict={_images: vimage,
+                                                                   _labels: vlabels,
+                                                                   keep_prob: 1.0})
+                    writer.add_summary(valid_summary, step)
+
+                    duration = time.time() - start_time
+                    print('Step %d | Loss = %.2f | Train Accuracy = %.2f | Validation Accuracy = %.2f (%.3f sec)'
+                          % (step, loss_value, train_acc, valid_acc, duration))
 
                 step += 1
         except tf.errors.OutOfRangeError:
@@ -198,13 +239,13 @@ if __name__ == '__main__':
     parser.add_argument(
         '--train_path',
         type=str,
-        default='tfrecord/train.tfrecords',
+        default='tfrecords/train.tfrecords',
         help='Directory with the training data.'
     )
     parser.add_argument(
         '--validation_path',
         type=str,
-        default='tfrecord/validation.tfrecords',
+        default='tfrecords/validation.tfrecords',
         help='Directory with the validation data.'
     )
     parser.add_argument(
@@ -222,4 +263,3 @@ if __name__ == '__main__':
 
     FLAGS, unparsed = parser.parse_known_args()
     tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
-

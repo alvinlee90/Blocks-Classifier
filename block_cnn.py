@@ -205,7 +205,7 @@ def loss(logits, labels):
     return loss
 
 
-def train(loss, learning_rate):
+def train(input_loss, learning_rate, global_step):
     """
     Train model definition (computes and applies the gradients)
     Args:
@@ -217,9 +217,7 @@ def train(loss, learning_rate):
     with tf.name_scope('train'):
         optimizer = tf.train.RMSPropOptimizer(learning_rate=learning_rate)
 
-        global_step = tf.Variable(0, name='global_step', trainable=False)
-
-        train_op = optimizer.minimize(loss, global_step=global_step)
+        train_op = optimizer.minimize(input_loss, global_step=global_step)
 
     return train_op
 
@@ -233,10 +231,9 @@ def evaluation(logits, labels):
     Returns:
          Classification accuracy [0,1)
     """
-    with tf.name_scope('evaluate'):
-        # Evaluate accuracy
-        correct_prediction = tf.nn.in_top_k(logits, labels, 1)
-        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+    # Evaluate accuracy
+    correct_prediction = tf.nn.in_top_k(logits, labels, 1)
+    accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
     return accuracy
 

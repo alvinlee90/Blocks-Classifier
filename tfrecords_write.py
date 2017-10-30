@@ -13,9 +13,9 @@ from random import shuffle
 dataset_path = 'dataset'
 
 # Files for the tfrecords
-train_filename = 'tfrecord/train.tfrecords'
-val_filename = 'tfrecord/validation.tfrecords'
-test_filename = 'tfrecord/test.tfrecords'
+train_filename = 'tfrecords/train.tfrecords'
+val_filename = 'tfrecords/validation.tfrecords'
+test_filename = 'tfrecords/test.tfrecords'
 
 # Image extension
 image_ext = '.jpeg'
