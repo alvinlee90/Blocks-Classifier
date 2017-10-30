@@ -84,8 +84,14 @@ def train_model():
     """
     with tf.Graph().as_default():
         # Graph definition
+        keep_prob = tf.placeholder_with_default(FLAGS.keep_prob,
+                                                shape=[],
+                                                name='keep_prob')
+
+        global_step = tf.Variable(0, dtype=tf.int32, trainable=False, name='global_step')
+
         with tf.name_scope('input'):
-            global_step = tf.Variable(0, dtype=tf.int32, trainable=False, name='global_step')
+
 
             train_images, train_labels = inputs(filename=FLAGS.train_path,
                                                 batch_size=FLAGS.batch_size,
@@ -107,10 +113,6 @@ def train_model():
             _labels = tf.placeholder_with_default(input=train_labels,
                                                   shape=[None],
                                                   name='labels')
-
-            keep_prob = tf.placeholder_with_default(FLAGS.keep_prob,
-                                                    shape=[],
-                                                    name='keep_prob')
 
         logits = blocks.inference(image=_images,
                                   num_classes=FLAGS.num_classes,
@@ -180,7 +182,7 @@ def train_model():
                     writer.add_summary(valid_summary, step)
 
                     duration = time.time() - start_time
-                    print('Step %d | Loss = %.2f | Train Accuracy = %.2f | Validation Accuracy = %.2f (%.3f sec)'
+                    print('Step %d | Loss = %.5f | Train Accuracy = %.2f | Validation Accuracy = %.2f (%.3f sec)'
                           % (step, loss_value, train_acc, valid_acc, duration))
 
                 step += 1

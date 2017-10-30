@@ -39,13 +39,13 @@ def conv2d(name, input, ksize, f_in, f_out):
         with tf.variable_scope('weights'):
             weights = tf.get_variable('weights',
                                 shape=[ksize, ksize, f_in, f_out],
-                                initializer=tf.truncated_normal_initializer())
+                                initializer=tf.contrib.layers.xavier_initializer())
             variable_summaries(weights)
 
         with tf.variable_scope('bias'):
             bias = tf.get_variable('bias',
                                 shape=[f_out],
-                                initializer=tf.truncated_normal_initializer())
+                                initializer=tf.zeros_initializer())
             variable_summaries(bias)
 
         # Convolutional layer
@@ -95,12 +95,12 @@ def fully_connected(name, input, f_in, f_out, keep_prob=1.0):
         with tf.variable_scope('weights'):
             weights = tf.get_variable('weights',
                                       shape=[f_in, f_out],
-                                      initializer=tf.truncated_normal_initializer())
+                                      initializer=tf.contrib.layers.xavier_initializer())
             variable_summaries(weights)
 
         with tf.variable_scope('bias'):
             bias = tf.get_variable('bias', shape=[f_out],
-                                   initializer=tf.random_normal_initializer())
+                                   initializer=tf.zeros_initializer())
             variable_summaries(bias)
 
         # Fully connected layer operation
@@ -162,25 +162,22 @@ def inference(image, num_classes, keep_prob):
     # Fully connected layer 1
     fc1 = fully_connected('fc1', flat, flat_dim, 1024, keep_prob)
 
-    # Fully connected layer 2
-    fc2 = fully_connected('fc2', fc1, 1024, 128, keep_prob)
-
     # Softmax layer
     with tf.variable_scope('softmax') as scope:
         # Weights and bias definition
         with tf.variable_scope('weights'):
             weights = tf.get_variable('weights',
-                                      shape=[128, num_classes],
-                                      initializer=tf.truncated_normal_initializer())
+                                      shape=[1024, num_classes],
+                                      initializer=tf.contrib.layers.xavier_initializer())
             variable_summaries(weights)
 
         with tf.variable_scope('bias'):
             bias = tf.get_variable('bias', shape=[num_classes],
-                                   initializer=tf.random_normal_initializer())
+                                   initializer=tf.zeros_initializer())
             variable_summaries(bias)
 
         # Softmax layer
-        logits = tf.add(tf.matmul(fc2, weights, name=scope.name), bias)
+        logits = tf.add(tf.matmul(fc1, weights, name=scope.name), bias)
 
     return logits
 
