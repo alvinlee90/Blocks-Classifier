@@ -282,10 +282,14 @@ def evaluation(logits, labels):
     # Evaluate accuracy
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
-        correct_prediction = tf.nn.in_top_k(logits, labels, 1)
-        accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        pred_classes = tf.cast(tf.argmax(logits, axis=1), tf.int32)
+        acc_op = tf.reduce_mean(tf.cast(tf.equal(pred_classes, labels), tf.float32))
 
-        return accuracy
+        # acc_op, _ = tf.metrics.accuracy(labels=labels, predictions=pred_classes)
+        # correct_prediction = tf.nn.in_top_k(logits, labels, 1)
+        # accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+        return acc_op
 
 
 

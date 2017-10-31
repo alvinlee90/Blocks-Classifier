@@ -149,7 +149,7 @@ def train_model():
         sess.run(init_op)
 
         # Checkpoint saver (save the model)
-        saver = tf.train.Saver(max_to_keep=5)
+        saver = tf.train.Saver(max_to_keep=2, keep_checkpoint_every_n_hours=5)
 
         # Set checkpoint path and restore checkpoint if exists
         ckpt = tf.train.get_checkpoint_state(FLAGS.checkpoint_dir)
@@ -169,6 +169,7 @@ def train_model():
         try:
             # Initialise the global_step and start time
             step = sess.run(global_step)
+            print("Starting at step: {}".format(step))
             start_time = time.time()
 
             while not coord.should_stop():
@@ -179,7 +180,7 @@ def train_model():
                 # Save checkpoint and print training updates (loss and accuracy)
                 if step % 100 == 0:
                     # Save checkpoint
-                    saver.save(sess, FLAGS.checkpoint_dir + "/block_cnn")
+                    saver.save(sess, FLAGS.checkpoint_dir + "/block_cnn", global_step=step)
 
                     # Training accuracy
                     train_acc, train_summary = sess.run([accuracy, training_summary],
@@ -197,14 +198,14 @@ def train_model():
                     writer.add_summary(valid_summary, step)
 
                     duration = time.time() - start_time
-                    print('Step %d | Loss = %.5f | Train Accuracy = %.2f | Validation Accuracy = %.2f (%.3f sec)'
+                    print('Step %d | Loss = %.5f | Train Accuracy = %.3f | Validation Accuracy = %.3f (%.1f sec)'
                           % (step, loss_value, train_acc, valid_acc, duration))
 
                 step += 1
         except tf.errors.OutOfRangeError:
             # End of training
             print('Done training for %d epochs, %d steps.' % (FLAGS.num_epochs, step))
-            saver.save(sess, FLAGS.checkpoint_dir + "/block_cnn")
+            saver.save(sess, FLAGS.checkpoint_dir + "/block_cnn", global_step=step)
         finally:
             coord.request_stop()
 
@@ -227,7 +228,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--keep_prob',
         type=float,
-        default=0.8,
+        default=0.5,
         help='Keep probability for drop out.'
     )
     parser.add_argument(
